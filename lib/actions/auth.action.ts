@@ -50,12 +50,10 @@ export async function signUp(params: SignUpParams) {
         message: "This email is already in use",
       };
     }
-
-    // TEMPORARY — show real error for debugging
-    return {
-      success: false,
-      message: `DEBUG: ${error.code || "no code"} — ${error.message || String(error)}`,
-    };
+     return {
+    success: false,
+    message: "Failed to create account. Please try again.",
+  };
   }
 }
 
