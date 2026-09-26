@@ -97,6 +97,71 @@ export const mappings = {
   "aws amplify": "amplify",
 };
 
+export const generator: CreateAssistantDTO = {
+  name: "Interview Generator",
+  firstMessage:
+    "Hi {{username}}, let's set up your mock interview. What role would you like to prepare for?",
+  transcriber: {
+    provider: "deepgram",
+    model: "nova-2",
+    language: "en",
+  },
+  voice: {
+    provider: "11labs",
+    voiceId: "sarah",
+    stability: 0.4,
+    similarityBoost: 0.8,
+    speed: 0.9,
+    style: 0.5,
+    useSpeakerBoost: true,
+  },
+  model: {
+    provider: "openai",
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: `You are helping {{username}} (user id: {{userid}}) set up a mock interview. Collect the following, one at a time, in natural conversation:
+1. Job role they're preparing for
+2. Experience level (Junior, Mid, or Senior)
+3. Tech stack (comma-separated, e.g. React, Node.js, MongoDB)
+4. Interview type: Technical, Behavioral, or Mixed
+5. Number of questions (default to 5 if they're unsure)
+
+Once you have all five, call the generateInterview function with the collected values, including the userid from context. Do not call it before you have every field. Keep responses short — this is a voice call, not a chat.`,
+      },
+    ],
+    tools: [
+      {
+        type: "function",
+        function: {
+          name: "generateInterview",
+          description:
+            "Generates interview questions once role, level, techstack, type, and amount are all collected.",
+          parameters: {
+            type: "object",
+            properties: {
+              userid: { type: "string", description: "The user's ID, from context" },
+              role: { type: "string", description: "Job role to prepare for" },
+              level: { type: "string", description: "Experience level" },
+              techstack: { type: "string", description: "Comma-separated technologies" },
+              type: { type: "string", description: "Technical, Behavioral, or Mixed" },
+              amount: { type: "number", description: "Number of questions" },
+            },
+            required: ["userid", "role", "level", "techstack", "type", "amount"],
+          },
+        },
+        server: {
+          url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/vapi/generate`,
+        },
+      },
+    ],
+  },
+};
+
+
+
+
 export const interviewer: CreateAssistantDTO = {
   name: "Interviewer",
   firstMessage:
@@ -117,7 +182,7 @@ export const interviewer: CreateAssistantDTO = {
   },
   model: {
     provider: "openai",
-    model: "gpt-4",
+    model: "gpt-4o-mini",
     messages: [
       {
         role: "system",

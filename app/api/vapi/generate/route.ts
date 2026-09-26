@@ -5,11 +5,29 @@ import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: Request) {
-  const { type, role, level, techstack, amount, userid } = await request.json();
+  const body = await request.json();
+
+  const toolCall = body?.message?.toolCalls?.[0];
+  const toolCallId = toolCall?.id;
+  const { type, role, level, techstack, amount, userid } =
+    toolCall?.function?.arguments ?? {};
 
   try {
+    // ✅ NEW: idempotency check — skip if this exact tool call already succeeded
+    const existing = await db
+      .collection("interviews")
+      .where("vapiToolCallId", "==", toolCallId)
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      return Response.json({
+        results: [{ toolCallId, result: "Interview already generated." }],
+      });
+    }
+
     const { text: questions } = await generateText({
-      model: google("gemini-2.0-flash-001"),
+      model: google("gemini-3.8-flash"),
       prompt: `Prepare questions for a job interview.
         The job role is ${role}.
         The job experience level is ${level}.
@@ -25,24 +43,47 @@ export async function POST(request: Request) {
     `,
     });
 
+    const cleanedQuestions = questions
+      .trim()
+      .replace(/^```json\s*/, "")
+      .replace(/```$/, "");
+
     const interview = {
       role: role,
       type: type,
       level: level,
       techstack: techstack.split(","),
-      questions: JSON.parse(questions),
+      questions: JSON.parse(cleanedQuestions),
       userId: userid,
       finalized: true,
       coverImage: getRandomInterviewCover(),
       createdAt: new Date().toISOString(),
+      vapiToolCallId: toolCallId, // ✅ NEW: store this so we can detect retries next time
     };
 
     await db.collection("interviews").add(interview);
 
-    return Response.json({ success: true }, { status: 200 });
+    return Response.json({
+      results: [
+        {
+          toolCallId,
+          result: "The interview has been generated and saved successfully.",
+        },
+      ],
+    });
   } catch (error) {
     console.error("Error:", error);
-    return Response.json({ success: false, error: error }, { status: 500 });
+    return Response.json(
+      {
+        results: [
+          {
+            toolCallId,
+            result: "Sorry, something went wrong generating the interview.",
+          },
+        ],
+      },
+      { status: 500 }
+    );
   }
 }
 
